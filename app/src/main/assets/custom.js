@@ -2,7 +2,7 @@ window.addEventListener("DOMContentLoaded",()=>{const t=document.createElement("
 // 非常重要，不懂代码不要动，这里可以解决80%的问题，也可以生产1000+的bug
 
 // 缩放比例常量
-const ZOOM_LEVEL = 0.50;
+const ZOOM_LEVEL = 0.75;
 
 // 1. 页面启动时设置缩放比例为75%
 const setDefaultZoom = () => {
@@ -32,28 +32,18 @@ const setDefaultZoom = () => {
     iframe.style.border = 'none';
     iframe.style.overflow = 'hidden';
     iframe.style.zIndex = '9999';
-    iframe.style.background = 'white';
+    iframe.style.width = '100%';
+    iframe.style.height = '100%';
     
-    // 设置iframe的缩放 - 确保全屏显示
+    // 设置iframe的缩放
     iframe.style.transform = `scale(${ZOOM_LEVEL})`;
     iframe.style.transformOrigin = 'top left';
     
-    // 确保iframe占满整个视口
-    iframe.style.width = `${100 / ZOOM_LEVEL}vw`;
-    iframe.style.height = `${100 / ZOOM_LEVEL}vh`;
-    
-    // 移除可能存在的滚动条
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-    
-    // 重置margin和padding
+    // 清空当前页面内容并设置body样式
+    document.body.innerHTML = '';
     document.body.style.margin = '0';
     document.body.style.padding = '0';
-    document.body.style.width = '100vw';
-    document.body.style.height = '100vh';
-    
-    // 清空当前页面内容
-    document.body.innerHTML = '';
+    document.body.style.overflow = 'hidden';
     
     // 添加iframe到页面
     document.body.appendChild(iframe);
@@ -66,6 +56,9 @@ const setDefaultZoom = () => {
     // 等待iframe加载完成后处理链接
     iframe.onload = () => {
         console.log('Zoom iframe loaded');
+        
+        // 调整iframe尺寸以确保完整显示
+        adjustIframeSize(iframe);
         
         // 在iframe中重新应用链接处理功能
         const iframeDoc = iframe.contentDocument;
@@ -97,16 +90,50 @@ const setDefaultZoom = () => {
             console.log('iframe open', url, target, features);
             iframe.contentWindow.location.href = url;
         };
+        
+        // 修复iframe内的控件交互问题
+        setTimeout(() => {
+            fixIframeControls();
+        }, 100);
     };
     
-    // 监听窗口大小变化，确保iframe仍能正确全屏显示
+    // 添加窗口大小变化事件监听器
     window.addEventListener('resize', () => {
-        console.log('Window resized, updating iframe size');
-        iframe.style.width = `${100 / ZOOM_LEVEL}vw`;
-        iframe.style.height = `${100 / ZOOM_LEVEL}vh`;
+        const iframe = document.getElementById('zoom-iframe');
+        if (iframe) {
+            adjustIframeSize(iframe);
+        }
     });
+}
+
+// 调整iframe尺寸以确保完整显示
+const adjustIframeSize = (iframe) => {
+    if (!iframe) return;
     
-    console.log('Zoom iframe applied successfully');
+    // 获取窗口尺寸
+    const windowWidth = window.innerWidth;
+    const windowHeight = window.innerHeight;
+    
+    // 计算iframe的实际尺寸（确保能容纳缩放后的内容）
+    // 当使用scale(ZOOM_LEVEL)时，iframe的内容会缩小，所以我们需要放大iframe的尺寸
+    // 这样缩放后的内容就能完整显示在窗口中
+    const scaledWidth = windowWidth;
+    const scaledHeight = windowHeight;
+    
+    // 设置iframe的缩放后的容器尺寸
+    iframe.style.width = `${scaledWidth}px`;
+    iframe.style.height = `${scaledHeight}px`;
+    
+    // 设置iframe内容的实际尺寸（需要比容器大才能容纳缩放后的内容）
+    // 当缩放比例为0.75时，内容会缩小到原来的75%，所以我们需要将iframe的尺寸设置为原来的133.33%
+    const actualWidth = windowWidth / ZOOM_LEVEL;
+    const actualHeight = windowHeight / ZOOM_LEVEL;
+    
+    // 应用实际尺寸
+    iframe.style.width = `${actualWidth}px`;
+    iframe.style.height = `${actualHeight}px`;
+    
+    console.log('Adjusted iframe size:', { actualWidth, actualHeight, scaledWidth, scaledHeight });
 }
 
 // 2. 链接点击事件处理函数
@@ -134,35 +161,36 @@ window.open = function (url, target, features) {
     location.href = url
 }
 
-
-
 // 4. 事件监听器设置
 // 设置页面加载完成后执行缩放
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', setDefaultZoom)
 } else {
+    // 立即执行缩放，避免页面闪烁
     setDefaultZoom()
 }
 
-// 4. 增强的滑块交互修复（针对iframe环境）
-const fixZoomedControls = () => {
+// 4. 增强的滑块交互修复（针对浏览器缩放场景）
+const fixZoomedControls = (targetDocument = document) => {
     console.log('Fixing zoomed controls');
     
-    // 获取主页面和iframe中的滑块元素
-    const sliderElements = document.querySelectorAll('input[type="range"], .slider, .range-slider');
+    // 获取所有滑块元素
+    const sliderElements = targetDocument.querySelectorAll('input[type="range"], .slider, .range-slider');
     
-    // 为每个滑块添加正确的事件处理
+    // 移除可能存在的旧监听器并添加新的事件处理
     sliderElements.forEach(slider => {
-        // 标记是否正在拖拽
-        let isDragging = false;
-        
-        // 移除可能存在的旧监听器
+        // 移除所有鼠标事件监听器
         slider.onmousedown = null;
         slider.onmousemove = null;
         slider.onmouseup = null;
+        
+        // 移除所有触摸事件监听器
         slider.ontouchstart = null;
         slider.ontouchmove = null;
         slider.ontouchend = null;
+        
+        // 为滑块添加正确的事件处理
+        let isDragging = false;
         
         // 鼠标事件
         slider.addEventListener('mousedown', (e) => {
@@ -170,10 +198,10 @@ const fixZoomedControls = () => {
             slider.classList.add('dragging');
         });
         
-        document.addEventListener('mousemove', (e) => {
+        targetDocument.addEventListener('mousemove', (e) => {
             if (!isDragging) return;
             
-            // 计算滑块位置 - 在iframe环境下，使用原始坐标系统
+            // 计算滑块位置
             const rect = slider.getBoundingClientRect();
             const percentage = (e.clientX - rect.left) / rect.width;
             const min = parseFloat(slider.min || 0);
@@ -187,7 +215,7 @@ const fixZoomedControls = () => {
             slider.dispatchEvent(new Event('input'));
         });
         
-        document.addEventListener('mouseup', () => {
+        targetDocument.addEventListener('mouseup', () => {
             if (isDragging) {
                 isDragging = false;
                 slider.classList.remove('dragging');
@@ -203,11 +231,11 @@ const fixZoomedControls = () => {
             e.preventDefault();
         });
         
-        document.addEventListener('touchmove', (e) => {
+        targetDocument.addEventListener('touchmove', (e) => {
             if (!isDragging) return;
             
             const touch = e.touches[0];
-            // 计算滑块位置 - 在iframe环境下，使用原始坐标系统
+            // 计算滑块位置
             const rect = slider.getBoundingClientRect();
             const percentage = (touch.clientX - rect.left) / rect.width;
             const min = parseFloat(slider.min || 0);
@@ -223,7 +251,7 @@ const fixZoomedControls = () => {
             e.preventDefault();
         });
         
-        document.addEventListener('touchend', () => {
+        targetDocument.addEventListener('touchend', () => {
             if (isDragging) {
                 isDragging = false;
                 slider.classList.remove('dragging');
@@ -232,106 +260,16 @@ const fixZoomedControls = () => {
             }
         });
     });
-    
-    // 同时处理iframe内部的滑块
-    const iframe = document.getElementById('zoom-iframe');
-    if (iframe && iframe.contentDocument) {
-        console.log('Fixing controls inside iframe');
-        const iframeDoc = iframe.contentDocument;
-        const iframeSliders = iframeDoc.querySelectorAll('input[type="range"], .slider, .range-slider');
-        
-        iframeSliders.forEach(slider => {
-            // 标记是否正在拖拽
-            let isDragging = false;
-            
-            // 移除可能存在的旧监听器
-            slider.onmousedown = null;
-            slider.onmousemove = null;
-            slider.onmouseup = null;
-            slider.ontouchstart = null;
-            slider.ontouchmove = null;
-            slider.ontouchend = null;
-            
-            // 鼠标事件
-            slider.addEventListener('mousedown', (e) => {
-                isDragging = true;
-                slider.classList.add('dragging');
-            });
-            
-            iframeDoc.addEventListener('mousemove', (e) => {
-                if (!isDragging) return;
-                
-                // 计算滑块位置 - 在iframe内部，使用原始坐标系统
-                const rect = slider.getBoundingClientRect();
-                const percentage = (e.clientX - rect.left) / rect.width;
-                const min = parseFloat(slider.min || 0);
-                const max = parseFloat(slider.max || 100);
-                const value = min + (percentage * (max - min));
-                
-                // 设置滑块值
-                slider.value = Math.max(min, Math.min(max, value));
-                
-                // 触发input事件
-                slider.dispatchEvent(new Event('input'));
-            });
-            
-            iframeDoc.addEventListener('mouseup', () => {
-                if (isDragging) {
-                    isDragging = false;
-                    slider.classList.remove('dragging');
-                    // 触发change事件
-                    slider.dispatchEvent(new Event('change'));
-                }
-            });
-            
-            // 触摸事件
-            slider.addEventListener('touchstart', (e) => {
-                isDragging = true;
-                slider.classList.add('dragging');
-                e.preventDefault();
-            });
-            
-            iframeDoc.addEventListener('touchmove', (e) => {
-                if (!isDragging) return;
-                
-                const touch = e.touches[0];
-                // 计算滑块位置 - 在iframe内部，使用原始坐标系统
-                const rect = slider.getBoundingClientRect();
-                const percentage = (touch.clientX - rect.left) / rect.width;
-                const min = parseFloat(slider.min || 0);
-                const max = parseFloat(slider.max || 100);
-                const value = min + (percentage * (max - min));
-                
-                // 设置滑块值
-                slider.value = Math.max(min, Math.min(max, value));
-                
-                // 触发input事件
-                slider.dispatchEvent(new Event('input'));
-                
-                e.preventDefault();
-            });
-            
-            iframeDoc.addEventListener('touchend', () => {
-                if (isDragging) {
-                    isDragging = false;
-                    slider.classList.remove('dragging');
-                    // 触发change事件
-                    slider.dispatchEvent(new Event('change'));
-                }
-            });
-        });
-    }
 }
 
 // 添加点击事件监听器
 document.addEventListener('click', hookClick, { capture: true });
 
-// 页面加载完成后修复控件交互问题
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        // 等待缩放完成后再修复控件
-        setTimeout(fixZoomedControls, 200);
-    });
-} else {
-    setTimeout(fixZoomedControls, 200);
+// 在iframe加载完成后修复iframe内的控件交互问题
+const fixIframeControls = () => {
+    const iframe = document.getElementById('zoom-iframe');
+    if (iframe && iframe.contentDocument) {
+        console.log('Fixing iframe controls');
+        fixZoomedControls(iframe.contentDocument);
+    }
 }
