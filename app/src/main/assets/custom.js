@@ -29,17 +29,28 @@ const setDefaultZoom = () => {
     iframe.style.position = 'fixed';
     iframe.style.top = '0';
     iframe.style.left = '0';
-    iframe.style.width = '100%';
-    iframe.style.height = '100%';
     iframe.style.border = 'none';
     iframe.style.overflow = 'hidden';
     iframe.style.zIndex = '9999';
+    iframe.style.background = 'white';
     
-    // 设置iframe的缩放
+    // 设置iframe的缩放 - 确保全屏显示
     iframe.style.transform = `scale(${ZOOM_LEVEL})`;
     iframe.style.transformOrigin = 'top left';
-    iframe.style.width = `${100 / ZOOM_LEVEL}%`;
-    iframe.style.height = `${100 / ZOOM_LEVEL}%`;
+    
+    // 确保iframe占满整个视口
+    iframe.style.width = `${100 / ZOOM_LEVEL}vw`;
+    iframe.style.height = `${100 / ZOOM_LEVEL}vh`;
+    
+    // 移除可能存在的滚动条
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    
+    // 重置margin和padding
+    document.body.style.margin = '0';
+    document.body.style.padding = '0';
+    document.body.style.width = '100vw';
+    document.body.style.height = '100vh';
     
     // 清空当前页面内容
     document.body.innerHTML = '';
@@ -87,6 +98,15 @@ const setDefaultZoom = () => {
             iframe.contentWindow.location.href = url;
         };
     };
+    
+    // 监听窗口大小变化，确保iframe仍能正确全屏显示
+    window.addEventListener('resize', () => {
+        console.log('Window resized, updating iframe size');
+        iframe.style.width = `${100 / ZOOM_LEVEL}vw`;
+        iframe.style.height = `${100 / ZOOM_LEVEL}vh`;
+    });
+    
+    console.log('Zoom iframe applied successfully');
 }
 
 // 2. 链接点击事件处理函数
@@ -114,6 +134,8 @@ window.open = function (url, target, features) {
     location.href = url
 }
 
+
+
 // 4. 事件监听器设置
 // 设置页面加载完成后执行缩放
 if (document.readyState === 'loading') {
@@ -122,27 +144,25 @@ if (document.readyState === 'loading') {
     setDefaultZoom()
 }
 
-// 4. 增强的滑块交互修复（针对浏览器缩放场景）
+// 4. 增强的滑块交互修复（针对iframe环境）
 const fixZoomedControls = () => {
     console.log('Fixing zoomed controls');
     
-    // 获取所有滑块元素
+    // 获取主页面和iframe中的滑块元素
     const sliderElements = document.querySelectorAll('input[type="range"], .slider, .range-slider');
     
-    // 移除可能存在的旧监听器并添加新的事件处理
+    // 为每个滑块添加正确的事件处理
     sliderElements.forEach(slider => {
-        // 移除所有鼠标事件监听器
+        // 标记是否正在拖拽
+        let isDragging = false;
+        
+        // 移除可能存在的旧监听器
         slider.onmousedown = null;
         slider.onmousemove = null;
         slider.onmouseup = null;
-        
-        // 移除所有触摸事件监听器
         slider.ontouchstart = null;
         slider.ontouchmove = null;
         slider.ontouchend = null;
-        
-        // 为滑块添加正确的事件处理
-        let isDragging = false;
         
         // 鼠标事件
         slider.addEventListener('mousedown', (e) => {
@@ -153,7 +173,7 @@ const fixZoomedControls = () => {
         document.addEventListener('mousemove', (e) => {
             if (!isDragging) return;
             
-            // 计算滑块位置
+            // 计算滑块位置 - 在iframe环境下，使用原始坐标系统
             const rect = slider.getBoundingClientRect();
             const percentage = (e.clientX - rect.left) / rect.width;
             const min = parseFloat(slider.min || 0);
@@ -187,7 +207,7 @@ const fixZoomedControls = () => {
             if (!isDragging) return;
             
             const touch = e.touches[0];
-            // 计算滑块位置
+            // 计算滑块位置 - 在iframe环境下，使用原始坐标系统
             const rect = slider.getBoundingClientRect();
             const percentage = (touch.clientX - rect.left) / rect.width;
             const min = parseFloat(slider.min || 0);
@@ -212,6 +232,95 @@ const fixZoomedControls = () => {
             }
         });
     });
+    
+    // 同时处理iframe内部的滑块
+    const iframe = document.getElementById('zoom-iframe');
+    if (iframe && iframe.contentDocument) {
+        console.log('Fixing controls inside iframe');
+        const iframeDoc = iframe.contentDocument;
+        const iframeSliders = iframeDoc.querySelectorAll('input[type="range"], .slider, .range-slider');
+        
+        iframeSliders.forEach(slider => {
+            // 标记是否正在拖拽
+            let isDragging = false;
+            
+            // 移除可能存在的旧监听器
+            slider.onmousedown = null;
+            slider.onmousemove = null;
+            slider.onmouseup = null;
+            slider.ontouchstart = null;
+            slider.ontouchmove = null;
+            slider.ontouchend = null;
+            
+            // 鼠标事件
+            slider.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                slider.classList.add('dragging');
+            });
+            
+            iframeDoc.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                
+                // 计算滑块位置 - 在iframe内部，使用原始坐标系统
+                const rect = slider.getBoundingClientRect();
+                const percentage = (e.clientX - rect.left) / rect.width;
+                const min = parseFloat(slider.min || 0);
+                const max = parseFloat(slider.max || 100);
+                const value = min + (percentage * (max - min));
+                
+                // 设置滑块值
+                slider.value = Math.max(min, Math.min(max, value));
+                
+                // 触发input事件
+                slider.dispatchEvent(new Event('input'));
+            });
+            
+            iframeDoc.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    slider.classList.remove('dragging');
+                    // 触发change事件
+                    slider.dispatchEvent(new Event('change'));
+                }
+            });
+            
+            // 触摸事件
+            slider.addEventListener('touchstart', (e) => {
+                isDragging = true;
+                slider.classList.add('dragging');
+                e.preventDefault();
+            });
+            
+            iframeDoc.addEventListener('touchmove', (e) => {
+                if (!isDragging) return;
+                
+                const touch = e.touches[0];
+                // 计算滑块位置 - 在iframe内部，使用原始坐标系统
+                const rect = slider.getBoundingClientRect();
+                const percentage = (touch.clientX - rect.left) / rect.width;
+                const min = parseFloat(slider.min || 0);
+                const max = parseFloat(slider.max || 100);
+                const value = min + (percentage * (max - min));
+                
+                // 设置滑块值
+                slider.value = Math.max(min, Math.min(max, value));
+                
+                // 触发input事件
+                slider.dispatchEvent(new Event('input'));
+                
+                e.preventDefault();
+            });
+            
+            iframeDoc.addEventListener('touchend', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    slider.classList.remove('dragging');
+                    // 触发change事件
+                    slider.dispatchEvent(new Event('change'));
+                }
+            });
+        });
+    }
 }
 
 // 添加点击事件监听器
